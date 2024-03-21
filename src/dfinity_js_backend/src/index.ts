@@ -1,13 +1,10 @@
-import { query, update, text, Record, StableBTreeMap, Variant, Vec, None, Some, Ok, Err, ic, Principal, Opt, nat64, Duration, Result, bool, Canister } from "azle";
-import {
-    Ledger, binaryAddressFromAddress, binaryAddressFromPrincipal, hexAddressFromPrincipal
-} from "azle/canisters/ledger";
-import { id } from "azle/src/lib/ic/id";
-import { hashCode } from "hashcode";
+import { query, update, text, Record, StableBTreeMap, Variant, Vec, Ok, Err, ic, Principal, nat64, Canister } from "azle";
+import { Ledger } from "azle/canisters/ledger";
 import { v4 as uuidv4 } from "uuid";
 
+// Define data structures
 const Ingredients = Record({
-    id  : text,
+    id: text,
     name: text,
     quantity: nat64,
     unit: text,
@@ -22,96 +19,71 @@ const Recipe = Record({
     id: text,
     name: text,
     description: text,
-    category: text, // category of the recipe (e.g. breakfast, lunch, dinner, dessert)
-    author: text,
-    ingredients: Vec(Ingredients),
-    steps: Vec(Step), // List of steps to prepare the recipe
-});
-
-
-
-
-const IngredientsPayload = Record({
-    name: text,
-    quantity: nat64,
-    unit: text,
-});
-
-const RecipePayload = Record({
-    name: text,
-    description: text,
     category: text,
     author: text,
+    ingredients: Vec(Ingredients),
+    steps: Vec(Step),
 });
-
-
 
 const Message = Variant({
     NotFound: text,
     InvalidPayload: text,
-    PaymentFailed: text,
-    PaymentCompleted: text
 });
 
+// Initialize storage
+const ingredientStorage = StableBTreeMap(0, text, Ingredients);
+const recipeStorage = StableBTreeMap(1, text, Recipe);
+const stepStorage = StableBTreeMap(2, text, Step);
 
-const ingredientStorage = StableBTreeMap(0,text, Ingredients)
-const recipeStorage =  StableBTreeMap(1,text, Recipe)
-const stepStorage =  StableBTreeMap(2,text, Step)
-
-
-
+// Initialize ledger
 const icpCanister = Ledger(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai"));
 
 export default Canister({
-
     // Create a Recipe
-    addRecipe: update([RecipePayload], Result(Recipe, Message), (payload) => {
-        if (typeof payload !== "object" || Object.keys(payload).length === 0) {
-            return Err({ InvalidPayload: "invalid payoad" })
+    addRecipe: update([Recipe], Result(Recipe, Message), (payload) => {
+        if (!payload || Object.keys(payload).length === 0) {
+            return Err({ InvalidPayload: "Invalid payload" });
         }
         const recipe = { id: uuidv4(), ingredients: [], steps: [], ...payload };
         recipeStorage.insert(recipe.id, recipe);
         return Ok(recipe);
-    }
-    ),
+    }),
 
     // Delete a recipe by id
     deleteRecipe: update([text], Result(Recipe, Message), (id) => {
         const deletedRecipeOpt = recipeStorage.get(id);
-        if ("None" in deletedRecipeOpt) {
-            return Err({ NotFound: `cannot delete the recipe: recipe with id=${id} not found` });
+        if (!deletedRecipeOpt) {
+            return Err({ NotFound: `Recipe with id=${id} not found` });
         }
         recipeStorage.remove(id);
-        return Ok(deletedRecipeOpt.Some);
-    }
-    ),
+        return Ok(deletedRecipeOpt);
+    }),
 
-    //update a recipe
+    // Update a recipe
     updateRecipe: update([Recipe], Result(Recipe, Message), (payload) => {
         const recipeOpt = recipeStorage.get(payload.id);
-        if ("None" in recipeOpt) {
-            return Err({ NotFound: `cannot update the recipe: recipe with id=${payload.id} not found` });
+        if (!recipeOpt) {
+            return Err({ NotFound: `Recipe with id=${payload.id} not found` });
         }
-        recipeStorage.insert(recipeOpt.Some.id, payload);
+        recipeStorage.insert(payload.id, payload);
         return Ok(payload);
-    }
-    ),
+    }),
 
     // Get all recipes
-    getRecipes: query([], Vec(Recipe),() => {
+    getRecipes: query([], Vec(Recipe), () => {
         return recipeStorage.values();
     }),
 
     // Get a recipe by id
     getRecipe: query([text], Result(Recipe, Message), (id) => {
-        const recipeOpt = recipeStorage.get(id);
-        if ("None" in recipeOpt) {
-            return Err({ NotFound: `recipe with id=${id} not found` });
+        const recipe = recipeStorage.get(id);
+        if (!recipe) {
+            return Err({ NotFound: `Recipe with id=${id} not found` });
         }
-        return Ok(recipeOpt.Some);
-    }
-    ),
-    // Get all ingredients
+        return Ok(recipe);
+    }),
+
+   // Get all ingredients
     getIngredients: query([], Vec(Ingredients),() => {
         return ingredientStorage.values();
     }),
@@ -255,12 +227,7 @@ export default Canister({
     }
     ),
 
-    
-   
-
 });
-
-
 
 // a workaround to make uuid package work with Azle
 globalThis.crypto = {
@@ -275,6 +242,3 @@ globalThis.crypto = {
         return array;
     }
 };
-
-
-
