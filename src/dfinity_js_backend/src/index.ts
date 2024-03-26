@@ -102,6 +102,11 @@ export default Canister({
         return recipeStorage.values();
     }),
 
+    // get all steps
+    getSteps: query([], Vec(Step),() => {
+        return stepStorage.values();
+    }),
+
     // Get a recipe by id
     getRecipe: query([text], Result(Recipe, Message), (id) => {
         const recipeOpt = recipeStorage.get(id);
@@ -160,7 +165,7 @@ export default Canister({
 
     // sort recipes by category
     sortRecipesByCategory: query([text], Vec(Recipe), (category) => {
-        return recipeStorage.values().filter((recipe) => recipe.category === category);
+        return recipeStorage.values().filter((recipe) => recipe.category.toLowerCase() === category.toLowerCase());
     }
     ),
     //Search for a recipe and return the result as a list of recipes or an error message
@@ -200,7 +205,7 @@ export default Canister({
         if ("None" in ingredientOpt) {
             return Err({ NotFound: `cannot remove ingredient from recipe: ingredient with id=${ingredientId} not found` });
         }
-        const recipe = recipeOpt.Some.Ingredients ;
+        const recipe = recipeOpt.Some.ingredients ;
 
         for (let i = 0; i < recipe.length; i++) {
             if (recipe[i].id === ingredientId) {
@@ -215,33 +220,29 @@ export default Canister({
     }
     ),
 
+   
+
+    
     // insert a step into a recipe
-    addStepToRecipe: update([text, text], Result(Recipe, Message), (recipeId, stepId) => {
+    addStepToRecipe: update([text, text], Result(Recipe, Message), (recipeId, step) => {
         const recipeOpt = recipeStorage.get(recipeId);
         if ("None" in recipeOpt) {
             return Err({ NotFound: `cannot add step to recipe: recipe with id=${recipeId} not found` });
         }
-        const stepOpt = stepStorage.get(stepId);
-        if ("None" in stepOpt) {
-            return Err({ NotFound: `cannot add step to recipe: step with id=${stepId} not found` });
-        }
-        recipeOpt.Some.steps.push(stepOpt.Some);
+        const newStep = addStep(step);
+        recipeOpt.Some.steps.push(newStep);
         recipeStorage.insert(recipeId, recipeOpt.Some);
         return Ok(recipeOpt.Some);
+        
     }
     ),
-
+    
     // remove a step from a recipe
     removeStepFromRecipe: update([text, text], Result(Recipe, Message), (recipeId, stepId) => {
         const recipeOpt = recipeStorage.get(recipeId);
         if ("None" in recipeOpt) {
             return Err({ NotFound: `cannot remove step from recipe: recipe with id=${recipeId} not found` });
         }
-        const stepOpt = stepStorage.get(stepId);
-        if ("None" in stepOpt) {
-            return Err({ NotFound: `cannot remove step from recipe: step with id=${stepId} not found` });
-        }
-
         const recipe = recipeOpt.Some.steps;
         for (let i = 0; i < recipe.length; i++) {
             if (recipe[i].id === stepId) {
@@ -253,13 +254,16 @@ export default Canister({
         recipeStorage.insert(recipeId, recipeOpt.Some);
         return Ok(recipeOpt.Some);
     }
-    ),
-
+    ),   
     
-   
-
 });
 
+// Helper function to add step
+function addStep(step: text){
+    const newStep = { id: uuidv4(), step };
+    stepStorage.insert(newStep.id, newStep);
+    return newStep;
+}
 
 
 // a workaround to make uuid package work with Azle
